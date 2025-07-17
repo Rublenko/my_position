@@ -2,9 +2,11 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Карта з точками з GeoJSON</title>
+  <title>Карта з точками MAP_WAR.json</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
   <style>
     html, body, #map {
       height: 100%; margin: 0; padding: 0;
@@ -18,45 +20,38 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-  // Ініціалізуємо карту
-  const map = L.map('map').setView([49.3, 29.27], 8); // Центр карти приблизно Вінницька область
+  const map = L.map('map').setView([49.29918, 29.27460], 10); // Центр на основі твоїх координат
 
-  // Додаємо OpenStreetMap плитки
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  // Функція для стилізації popup з інформацією
-  function createPopupContent(feature) {
-    const p = feature.properties;
-    return `<b>${p.name || "Без назви"}</b><br/>
-            Адреса: ${p.adress || "-"}<br/>
-            Тип: ${p.type || "-"}<br/>
-            Телефон: ${p.tel_consul || "-"}<br/>
-            Пошта: ${p.onl_consul || "-"}<br/>
-            Населений пункт: ${p.name_NP || "-"}<br/>
-            Статус: ${p.status || "-"}<br/>
-            Додаткова інформація: ${p.full_name || "-"}`;
-  }
-
-  // Завантажуємо GeoJSON (потрібно, щоб MAP_WAR.json був доступним по цьому шляху)
+  // Завантажуємо JSON з точками
   fetch('MAP_WAR.json')
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) throw new Error("Помилка завантаження JSON");
+      return response.json();
+    })
     .then(geojsonData => {
-      // Додаємо GeoJSON на карту
+      // Додаємо GeoJSON точки на карту
       L.geoJSON(geojsonData, {
-        pointToLayer: (feature, latlng) => {
-          return L.marker(latlng);
-        },
-        onEachFeature: (feature, layer) => {
-          const popupContent = createPopupContent(feature);
+        onEachFeature: function(feature, layer) {
+          const props = feature.properties;
+          const popupContent = `
+            <b>${props.name || 'Без назви'}</b><br/>
+            ${props.adress || ''}<br/>
+            ${props.timetable || ''}
+          `;
           layer.bindPopup(popupContent);
+        },
+        pointToLayer: function(feature, latlng) {
+          return L.marker(latlng);
         }
       }).addTo(map);
     })
     .catch(err => {
-      console.error('Помилка завантаження GeoJSON:', err);
-      alert('Не вдалося завантажити дані мапи.');
+      console.error(err);
+      alert('Не вдалося завантажити точки MAP_WAR.json');
     });
 </script>
 
