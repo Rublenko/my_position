@@ -1,55 +1,64 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="UTF-8">
-  <title>Моя локація</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <meta charset="UTF-8" />
+  <title>Карта з точками з GeoJSON</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html, body, #map {
-      height: 100%;
-      margin: 0;
-      padding: 0;
+      height: 100%; margin: 0; padding: 0;
     }
   </style>
 </head>
 <body>
+
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
-  function initMap(lat, lon) {
-    const map = L.map('map').setView([lat, lon], 15);
+  // Ініціалізуємо карту
+  const map = L.map('map').setView([49.3, 29.27], 8); // Центр карти приблизно Вінницька область
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+  // Додаємо OpenStreetMap плитки
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
 
-    L.marker([lat, lon])
-      .addTo(map)
-      .bindPopup("Ви тут 📍")
-      .openPopup();
+  // Функція для стилізації popup з інформацією
+  function createPopupContent(feature) {
+    const p = feature.properties;
+    return `<b>${p.name || "Без назви"}</b><br/>
+            Адреса: ${p.adress || "-"}<br/>
+            Тип: ${p.type || "-"}<br/>
+            Телефон: ${p.tel_consul || "-"}<br/>
+            Пошта: ${p.onl_consul || "-"}<br/>
+            Населений пункт: ${p.name_NP || "-"}<br/>
+            Статус: ${p.status || "-"}<br/>
+            Додаткова інформація: ${p.full_name || "-"}`;
   }
 
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      position => {
-        const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
-        initMap(lat, lon);
-      },
-      error => {
-        alert("Не вдалося отримати геолокацію. Показуємо Київ.");
-        initMap(50.45, 30.52); // fallback
-      }
-    );
-  } else {
-    alert("Геолокація не підтримується. Показуємо Київ.");
-    initMap(50.45, 30.52);
-  }
+  // Завантажуємо GeoJSON (потрібно, щоб MAP_WAR.json був доступним по цьому шляху)
+  fetch('MAP_WAR.json')
+    .then(response => response.json())
+    .then(geojsonData => {
+      // Додаємо GeoJSON на карту
+      L.geoJSON(geojsonData, {
+        pointToLayer: (feature, latlng) => {
+          return L.marker(latlng);
+        },
+        onEachFeature: (feature, layer) => {
+          const popupContent = createPopupContent(feature);
+          layer.bindPopup(popupContent);
+        }
+      }).addTo(map);
+    })
+    .catch(err => {
+      console.error('Помилка завантаження GeoJSON:', err);
+      alert('Не вдалося завантажити дані мапи.');
+    });
 </script>
+
 </body>
 </html>
