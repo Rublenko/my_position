@@ -2,56 +2,34 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Карта з точками MAP_WAR.json</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  
-  <style>
-    html, body, #map {
-      height: 100%; margin: 0; padding: 0;
-    }
-  </style>
+  <title>Перевірка координат MAP_WAR.json</title>
 </head>
 <body>
-
-<div id="map"></div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script>
-  const map = L.map('map').setView([49.29918, 29.27460], 10);
-
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
-
   fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json')
     .then(response => {
-      if (!response.ok) throw new Error("Помилка завантаження JSON");
+      if (!response.ok) throw new Error("Не вдалося завантажити JSON");
       return response.json();
     })
-    .then(geojsonData => {
-      L.geoJSON(geojsonData, {
-        onEachFeature: function(feature, layer) {
-          const props = feature.properties;
-          const popupContent = `
-            <b>${props.name || 'Без назви'}</b><br/>
-            ${props.adress || ''}<br/>
-            ${props.timetable || ''}
-          `;
-          layer.bindPopup(popupContent);
-        },
-        pointToLayer: function(feature, latlng) {
-          return L.marker(latlng);
+    .then(data => {
+      if (!data.features || !Array.isArray(data.features)) {
+        console.error("JSON не містить features");
+        return;
+      }
+      data.features.forEach((feature, i) => {
+        const coords = feature.geometry && feature.geometry.coordinates;
+        const name = feature.properties && feature.properties.name;
+        if (coords && coords.length === 2) {
+          console.log(`Точка ${i + 1}: ${name || 'Без назви'}, координати: [${coords[1]}, ${coords[0]}]`);
+          // Зверни увагу: GeoJSON координати [lon, lat], а leaflet приймає [lat, lon]
+        } else {
+          console.warn(`Точка ${i + 1} має некоректні координати`);
         }
-      }).addTo(map);
+      });
     })
     .catch(err => {
       console.error(err);
-      alert('Не вдалося завантажити точки MAP_WAR.json');
     });
 </script>
-
 </body>
 </html>
