@@ -26,7 +26,7 @@
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  fetch('https://rublenko.github.io/MAP_WAR.json')
+  fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json')
     .then(response => {
       if (!response.ok) throw new Error("Помилка завантаження JSON");
       return response.json();
