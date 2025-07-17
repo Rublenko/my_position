@@ -20,20 +20,18 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-  const map = L.map('map').setView([49.29918, 29.27460], 10); // Центр на основі твоїх координат
+  const map = L.map('map').setView([49.29918, 29.27460], 10);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
 
-  // Завантажуємо JSON з точками
-  fetch('MAP_WAR.json')
+  fetch('https://rublenko.github.io/MAP_WAR.json')
     .then(response => {
       if (!response.ok) throw new Error("Помилка завантаження JSON");
       return response.json();
     })
     .then(geojsonData => {
-      // Додаємо GeoJSON точки на карту
       L.geoJSON(geojsonData, {
         onEachFeature: function(feature, layer) {
           const props = feature.properties;
