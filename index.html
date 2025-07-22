@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Найближча точка до мого місцезнаходження</title>
+  <title>Перевірка координат MAP_WAR.json</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     #map { height: 100vh; width: 100%; }
@@ -10,7 +10,6 @@
 </head>
 <body>
   <div id="map"></div>
-
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const map = L.map('map').setView([48.3794, 31.1656], 6); // Центр України
@@ -19,22 +18,7 @@
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    let geojsonData = [];
-
-    // Гаверсинова формула для обчислення відстані
-    function haversineDistance([lat1, lon1], [lat2, lon2]) {
-      const R = 6371;
-      const toRad = deg => deg * Math.PI / 180;
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
-      const a = Math.sin(dLat / 2) ** 2 +
-                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-                Math.sin(dLon / 2) ** 2;
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    }
-
-    // Завантажуємо GeoJSON
+    // Завантаження GeoJSON
     fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json')
       .then(response => {
         if (!response.ok) throw new Error("Не вдалося завантажити JSON");
@@ -46,86 +30,46 @@
           return;
         }
 
-        geojsonData = data.features;
+        data.features.forEach((feature, i) => {
+          const coords = feature.geometry && feature.geometry.coordinates;
+          const name = feature.properties && feature.properties.name || 'Без назви';
 
-        // Додаємо всі точки з файлу
-        geojsonData.forEach((feature, i) => {
-          const coords = feature.geometry?.coordinates;
-          const name = feature.properties?.name || 'Без назви';
-
-          if (coords?.length === 2) {
-            const latlng = [coords[1], coords[0]];
+          if (coords && coords.length === 2) {
+            const latlng = [coords[1], coords[0]]; // [lat, lon]
             L.marker(latlng).addTo(map)
               .bindPopup(`<b>${name}</b><br/>Координати: ${latlng.join(', ')}`);
+          } else {
+            console.warn(`Точка ${i + 1} має некоректні координати`);
           }
         });
-
-        // Після завантаження — викликаємо геолокацію
-        locateUserAndFindNearest();
+      })
+      .catch(err => {
+        console.error(err);
       });
 
-    function locateUserAndFindNearest() {
-      const redIcon = L.icon({
-        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
+    // Додавання червоного маркера твого місцезнаходження
+    const redIcon = L.icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(position => {
+        const userLatLng = [position.coords.latitude, position.coords.longitude];
+        L.marker(userLatLng, { icon: redIcon })
+          .addTo(map)
+          .bindPopup("Ваше місцезнаходження")
+          .openPopup();
+        map.setView(userLatLng, 12); // наближаємось до вашої позиції
+      }, error => {
+        console.warn("Не вдалося визначити місцезнаходження: ", error.message);
       });
-
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(position => {
-          const userLatLng = [position.coords.latitude, position.coords.longitude];
-
-          // Додаємо маркер користувача
-          L.marker(userLatLng, { icon: redIcon })
-            .addTo(map)
-            .bindPopup("Ваше місцезнаходження")
-            .openPopup();
-
-          // Шукаємо найближчу точку
-          let minDist = Infinity;
-          let nearest = null;
-
-          geojsonData.forEach(feature => {
-            const coords = feature.geometry?.coordinates;
-            if (coords?.length === 2) {
-              const pointLatLng = [coords[1], coords[0]];
-              const dist = haversineDistance(userLatLng, pointLatLng);
-              if (dist < minDist) {
-                minDist = dist;
-                nearest = {
-                  ...feature,
-                  dist,
-                  latlng: pointLatLng
-                };
-              }
-            }
-          });
-
-          if (nearest) {
-            // Виділяємо найближчу точку
-            L.circle(nearest.latlng, {
-              radius: 300,
-              color: 'blue',
-              fillColor: '#30f',
-              fillOpacity: 0.5
-            }).addTo(map).bindPopup(
-              `<b>Найближча точка:</b><br/>${nearest.properties.name}<br/>Відстань: ${nearest.dist.toFixed(2)} км`
-            ).openPopup();
-
-            // Масштабуємо карту на обидві точки
-            const bounds = L.latLngBounds([userLatLng, nearest.latlng]);
-            map.fitBounds(bounds, { padding: [50, 50] });
-          }
-
-        }, err => {
-          console.warn("Помилка геолокації: ", err.message);
-        });
-      } else {
-        console.warn("Геолокація не підтримується");
-      }
+    } else {
+      console.warn("Геолокація не підтримується цим браузером.");
     }
   </script>
 </body>
