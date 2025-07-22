@@ -2,244 +2,99 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Громада з маршрутом</title>
+  <title>Карта з меню ЦНАПу</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
-
   <style>
-    html, body { height: 100%; margin: 0; }
+    html, body { margin: 0; height: 100%; font-family: sans-serif; }
     #map { height: 100%; width: 100%; }
 
-    #infoToggle {
+    #cnapInfoPanel {
       position: absolute;
-      bottom: 10px;
-      left: 10px;
-      z-index: 1000;
-      padding: 8px 14px;
-      background: white;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      cursor: pointer;
-      font-family: sans-serif;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-    }
-
-    #info {
-      position: absolute;
-      bottom: 0;
-      width: 100%;
-      height: 140px;
-      overflow-y: auto;
-      padding: 10px;
-      background: #f7f7f7;
-      border-top: 2px solid #ccc;
-      font-family: sans-serif;
-      white-space: pre-line;
-      z-index: 999;
+      right: 10px;
+      top: 10px;
+      width: 300px;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 12px;
+      padding: 15px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
       display: none;
+      z-index: 1000;
     }
 
-    @media (max-width: 768px) {
-      .leaflet-routing-container {
-        display: none !important;
-      }
+    #cnapInfoPanel h3 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+
+    #closeInfoBtn {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      background: transparent;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="infoToggle">Показати інформацію</div>
-  <div id="info">Очікуємо визначення місцезнаходження...</div>
+
+  <div id="cnapInfoPanel">
+    <button id="closeInfoBtn">&times;</button>
+    <h3>ЦНАП</h3>
+    <div id="cnapDetails">
+      <em>Оберіть точку на мапі</em>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
-  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 
   <script>
-    const map = L.map('map').setView([48.3794, 31.1656], 6);
+    const map = L.map('map').setView([48.38, 31.16], 6);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    const redIcon = L.icon({
-      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
-    });
+    const infoPanel = document.getElementById('cnapInfoPanel');
+    const cnapDetails = document.getElementById('cnapDetails');
+    const closeBtn = document.getElementById('closeInfoBtn');
+    closeBtn.addEventListener('click', () => infoPanel.style.display = 'none');
 
-    const infoBlock = document.getElementById('info');
-    const infoToggle = document.getElementById('infoToggle');
-    let infoVisible = false;
+    async function loadCnapData() {
+      const res = await fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json');
+      const data = await res.json();
 
-    infoToggle.addEventListener('click', () => {
-      infoVisible = !infoVisible;
-      infoBlock.style.display = infoVisible ? 'block' : 'none';
-      infoToggle.innerText = infoVisible ? 'Сховати інформацію' : 'Показати інформацію';
-    });
+      data.features.forEach(p => {
+        const coords = p.geometry.coordinates;
+        const props = p.properties;
 
-    let pointMarkersGroup = L.layerGroup().addTo(map);
-    let routingControl = null;
-    let polygonLayer = null;
-    let userLatLng = null;
+        const marker = L.marker([coords[1], coords[0]]).addTo(map)
+          .bindTooltip(`<b>${props.name || "Без назви"}</b>`, {
+            direction: 'top',
+            offset: [0, -10],
+            opacity: 0.9,
+            permanent: false
+          });
 
-    function updateRoute(destinationLatLng) {
-      if (!userLatLng) return;
-      if (routingControl) map.removeControl(routingControl);
-
-      routingControl = L.Routing.control({
-        waypoints: [
-          L.latLng(userLatLng),
-          L.latLng(destinationLatLng)
-        ],
-        routeWhileDragging: false,
-        showAlternatives: false,
-        fitSelectedRoutes: true,
-        addWaypoints: false,
-        show: window.innerWidth > 768
-      }).addTo(map);
-    }
-
-    function pointInPolygon(userPoint, geojson) {
-      for (let feature of geojson.features) {
-        if (turf.booleanPointInPolygon(userPoint, feature)) {
-          return feature;
-        }
-      }
-      return null;
-    }
-
-    async function handlePosition(position) {
-      const lat = position.coords.latitude;
-      const lon = position.coords.longitude;
-      userLatLng = [lat, lon];
-      const userPoint = turf.point([lon, lat]);
-
-      pointMarkersGroup.clearLayers();
-      if (routingControl) {
-        map.removeControl(routingControl);
-        routingControl = null;
-      }
-      if (polygonLayer) {
-        map.removeLayer(polygonLayer);
-        polygonLayer = null;
-      }
-
-      L.marker(userLatLng, { icon: redIcon }).addTo(map)
-        .bindPopup("Ваше місцезнаходження").openPopup();
-      map.setView(userLatLng, 10);
-
-      try {
-        const resRegion = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=uk`);
-        const regionData = await resRegion.json();
-        const oblastFromAPI = regionData.principalSubdivision;
-        if (!oblastFromAPI) throw new Error("Не вдалося отримати назву області.");
-
-        infoBlock.innerText = `Область: ${oblastFromAPI}\nЗавантаження полігонів...`;
-
-        const resGeo = await fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/community.json');
-        const geojson = await resGeo.json();
-
-        const filtered = {
-          type: "FeatureCollection",
-          features: geojson.features.filter(f => {
-            const admin1 = f.properties.ADMIN_1;
-            return oblastFromAPI.includes(admin1) || admin1.includes(oblastFromAPI);
-          })
-        };
-
-        const matchedFeature = pointInPolygon(userPoint, filtered);
-        if (!matchedFeature) {
-          infoBlock.innerText += "\nГромаду не знайдено для цієї області.";
-          return;
-        }
-
-        polygonLayer = L.geoJSON(matchedFeature, {
-          style: {
-            color: '#3388ff',
-            weight: 3,
-            fillColor: '#3388ff',
-            fillOpacity: 0.2
-          }
-        }).addTo(map);
-
-        const props = matchedFeature.properties;
-        const cod3 = props.COD_3?.toLowerCase();
-
-        let outputText =
-          `Область: ${props.ADMIN_1}\n` +
-          `Район: ${props.ADMIN_2}\n` +
-          `Громада: ${props.ADMIN_3}\n` +
-          `Тип: ${props.type_NP}\n` +
-          `Код COD_3: ${props.COD_3}\n\n` +
-          `Завантаження точок...`;
-
-        infoBlock.innerText = outputText;
-
-        const resPoints = await fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json');
-        const pointData = await resPoints.json();
-
-        const matchedPoints = pointData.features.filter(p =>
-          p.properties.cod_3?.toLowerCase() === cod3
-        );
-
-        if (matchedPoints.length === 0) {
-          infoBlock.innerText += `\nТочки не знайдені для цієї громади.`;
-          return;
-        }
-
-        let nearest = matchedPoints[0];
-        let minDist = turf.distance(userPoint, turf.point(nearest.geometry.coordinates), { units: 'kilometers' });
-        matchedPoints.forEach(p => {
-          const dist = turf.distance(userPoint, turf.point(p.geometry.coordinates), { units: 'kilometers' });
-          if (dist < minDist) {
-            minDist = dist;
-            nearest = p;
-          }
+        marker.on('click', () => {
+          cnapDetails.innerHTML = `
+            <b>Назва:</b> ${props.full_name || '—'}<br>
+            <b>Тип:</b> ${props.type_origin || '—'}<br>
+            <b>Адреса:</b> ${props.adress || '—'}<br>
+            <b>Графік:</b> ${props.timetable || '—'}<br>
+            <b>Сайт:</b> ${props.web ? `<a href="${props.web}" target="_blank">${props.web}</a>` : '—'}<br>
+            <b>Телефон:</b> ${props.tel_consul || '—'}<br>
+            <b>Онлайн консультування:</b> ${props.onl_consul || '—'}
+          `;
+          infoPanel.style.display = 'block';
         });
-
-        outputText += `\nЗнайдено точок: ${matchedPoints.length}\n\n` +
-                      `Найближча точка (${minDist.toFixed(2)} км):\n` +
-                      `${nearest.properties.name || 'Без назви'}\n` +
-                      `${nearest.properties.adress || ''}`;
-        infoBlock.innerText = outputText;
-
-        // Додаємо всі маркери з tooltip (підказкою при наведенні)
-        matchedPoints.forEach(p => {
-          const coords = p.geometry.coordinates;
-          const name = p.properties.name || "Без назви";
-          const address = p.properties.adress || "";
-          const marker = L.marker([coords[1], coords[0]])
-            .addTo(pointMarkersGroup)
-            .bindTooltip(`<b>${name}</b><br>${address}`, {
-              direction: 'top',
-              offset: [0, -10],
-              opacity: 0.9,
-              permanent: false // показує при наведенні
-            });
-
-          marker.on('click', () => updateRoute([coords[1], coords[0]]));
-        });
-
-        updateRoute([nearest.geometry.coordinates[1], nearest.geometry.coordinates[0]]);
-
-      } catch (error) {
-        console.error("Помилка:", error);
-        infoBlock.innerText = "Сталася помилка при обробці: " + error.message;
-      }
-    }
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(handlePosition, err => {
-        infoBlock.innerText = "Не вдалося визначити місцезнаходження: " + err.message;
       });
-    } else {
-      infoBlock.innerText = "Ваш браузер не підтримує геолокацію.";
     }
+
+    loadCnapData();
   </script>
 </body>
 </html>
