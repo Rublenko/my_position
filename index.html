@@ -2,9 +2,12 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Громада за геолокацією з точками на мапі</title>
+  <title>Громада з маршрутом до найближчої точки</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+  
   <style>
     html, body { height: 100%; margin: 0; }
     #map { height: calc(100% - 140px); width: 100%; }
@@ -24,6 +27,7 @@
   <div id="info">Очікуємо визначення місцезнаходження...</div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
   <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 
   <script>
@@ -43,6 +47,7 @@
 
     const infoBlock = document.getElementById('info');
     let pointMarkersGroup = L.layerGroup().addTo(map);
+    let routingControl = null;
 
     function pointInPolygon(userPoint, geojson) {
       for (let feature of geojson.features) {
@@ -59,16 +64,18 @@
       const userLatLng = [lat, lon];
       const userPoint = turf.point([lon, lat]);
 
-      // Очистка попередніх точок
       pointMarkersGroup.clearLayers();
 
-      // Маркер позиції користувача
+      if (routingControl) {
+        map.removeControl(routingControl);
+        routingControl = null;
+      }
+
       L.marker(userLatLng, { icon: redIcon }).addTo(map)
         .bindPopup("Ваше місцезнаходження").openPopup();
       map.setView(userLatLng, 10);
 
       try {
-        // Отримання області
         const resRegion = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=uk`);
         const regionData = await resRegion.json();
         const oblastFromAPI = regionData.principalSubdivision;
@@ -76,11 +83,9 @@
 
         infoBlock.innerText = `Отримано область: ${oblastFromAPI}\nЗавантаження полігонів...`;
 
-        // Завантаження громад
         const resGeo = await fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/community.json');
         const geojson = await resGeo.json();
 
-        // Фільтрація полігонів по області
         const filtered = {
           type: "FeatureCollection",
           features: geojson.features.filter(f => {
@@ -91,7 +96,6 @@
 
         infoBlock.innerText += `\nЗнайдено полігонів для області: ${filtered.features.length}`;
 
-        // Пошук громади
         const matchedFeature = pointInPolygon(userPoint, filtered);
         if (!matchedFeature) {
           infoBlock.innerText += "\nГромаду не знайдено для цієї області.";
@@ -111,11 +115,9 @@
 
         infoBlock.innerText = outputText;
 
-        // Завантаження точок
         const resPoints = await fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json');
         const pointData = await resPoints.json();
 
-        // Відбір точок по cod_3 громади
         const matchedPoints = pointData.features.filter(p =>
           p.properties.cod_3?.toLowerCase() === cod3
         );
@@ -128,7 +130,6 @@
         // Знаходимо найближчу точку
         let nearest = matchedPoints[0];
         let minDist = turf.distance(userPoint, turf.point(nearest.geometry.coordinates), { units: 'kilometers' });
-
         matchedPoints.forEach(p => {
           const dist = turf.distance(userPoint, turf.point(p.geometry.coordinates), { units: 'kilometers' });
           if (dist < minDist) {
@@ -137,15 +138,13 @@
           }
         });
 
-        // Вивід інформації про найближчу точку
         outputText += `\nЗнайдено точок: ${matchedPoints.length}\n\n` +
                       `Найближча точка (${minDist.toFixed(2)} км):\n` +
                       `${nearest.properties.name || 'Без назви'}\n` +
                       `${nearest.properties.adress || ''}`;
-
         infoBlock.innerText = outputText;
 
-        // Додаємо маркери всіх точок на мапу
+        // Додаємо маркери всіх точок
         matchedPoints.forEach(p => {
           const coords = p.geometry.coordinates;
           const name = p.properties.name || "Без назви";
@@ -153,6 +152,18 @@
           L.marker([coords[1], coords[0]]).addTo(pointMarkersGroup)
             .bindPopup(`<b>${name}</b><br>${address}`);
         });
+
+        // Додаємо маршрут до найближчої точки
+        routingControl = L.Routing.control({
+          waypoints: [
+            L.latLng(lat, lon),
+            L.latLng(nearest.geometry.coordinates[1], nearest.geometry.coordinates[0])
+          ],
+          routeWhileDragging: false,
+          showAlternatives: false,
+          fitSelectedRoutes: true,
+          addWaypoints: false
+        }).addTo(map);
 
       } catch (error) {
         console.error("Помилка:", error);
