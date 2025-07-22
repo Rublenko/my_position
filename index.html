@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Громада за геолокацією з пошуком найближчої точки</title>
+  <title>Громада за геолокацією з точками на мапі</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -15,7 +15,7 @@
       background: #f7f7f7;
       border-top: 2px solid #ccc;
       font-family: sans-serif;
-      white-space: pre-line; /* Для переносів рядків */
+      white-space: pre-line;
     }
   </style>
 </head>
@@ -42,6 +42,7 @@
     });
 
     const infoBlock = document.getElementById('info');
+    let pointMarkersGroup = L.layerGroup().addTo(map);
 
     function pointInPolygon(userPoint, geojson) {
       for (let feature of geojson.features) {
@@ -58,13 +59,16 @@
       const userLatLng = [lat, lon];
       const userPoint = turf.point([lon, lat]);
 
+      // Очистка попередніх точок
+      pointMarkersGroup.clearLayers();
+
       // Маркер позиції користувача
       L.marker(userLatLng, { icon: redIcon }).addTo(map)
         .bindPopup("Ваше місцезнаходження").openPopup();
       map.setView(userLatLng, 10);
 
       try {
-        // Отримання області з BigDataCloud
+        // Отримання області
         const resRegion = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=uk`);
         const regionData = await resRegion.json();
         const oblastFromAPI = regionData.principalSubdivision;
@@ -72,11 +76,11 @@
 
         infoBlock.innerText = `Отримано область: ${oblastFromAPI}\nЗавантаження полігонів...`;
 
-        // Завантаження громади
+        // Завантаження громад
         const resGeo = await fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/community.json');
         const geojson = await resGeo.json();
 
-        // Фільтрація полігонів по області (двостороння перевірка)
+        // Фільтрація полігонів по області
         const filtered = {
           type: "FeatureCollection",
           features: geojson.features.filter(f => {
@@ -87,7 +91,7 @@
 
         infoBlock.innerText += `\nЗнайдено полігонів для області: ${filtered.features.length}`;
 
-        // Знаходимо громаду, в якій знаходиться точка користувача
+        // Пошук громади
         const matchedFeature = pointInPolygon(userPoint, filtered);
         if (!matchedFeature) {
           infoBlock.innerText += "\nГромаду не знайдено для цієї області.";
@@ -107,11 +111,11 @@
 
         infoBlock.innerText = outputText;
 
-        // Завантажуємо точки з MAP_WAR.json
+        // Завантаження точок
         const resPoints = await fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json');
         const pointData = await resPoints.json();
 
-        // Відфільтровуємо точки, які відповідають COD_3 громади
+        // Відбір точок по cod_3 громади
         const matchedPoints = pointData.features.filter(p =>
           p.properties.cod_3?.toLowerCase() === cod3
         );
@@ -140,6 +144,15 @@
                       `${nearest.properties.adress || ''}`;
 
         infoBlock.innerText = outputText;
+
+        // Додаємо маркери всіх точок на мапу
+        matchedPoints.forEach(p => {
+          const coords = p.geometry.coordinates;
+          const name = p.properties.name || "Без назви";
+          const address = p.properties.adress || "";
+          L.marker([coords[1], coords[0]]).addTo(pointMarkersGroup)
+            .bindPopup(`<b>${name}</b><br>${address}`);
+        });
 
       } catch (error) {
         console.error("Помилка:", error);
