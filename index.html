@@ -1,13 +1,23 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Найближча точка у громаді</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
   <style>
-    html, body { height: 100%; margin: 0; }
-    #map { height: calc(100% - 140px); width: 100%; }
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+    #map {
+      height: calc(100% - 140px);
+      width: 100%;
+    }
     #info {
       height: 140px;
       overflow-y: auto;
@@ -24,93 +34,140 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-
   <script>
-    const map = L.map('map').setView([48.3794,31.1656],6);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution:'&copy; OpenStreetMap'
+    const map = L.map("map").setView([48.3794, 31.1656], 6);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap",
     }).addTo(map);
 
     const redIcon = L.icon({
-      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      iconSize:[25,41], iconAnchor:[12,41], popupAnchor:[1,-34], shadowSize:[41,41]
+      iconUrl:
+        "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
+      shadowUrl:
+        "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41],
     });
     const greenIcon = L.icon({
-      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      iconSize:[25,41], iconAnchor:[12,41], popupAnchor:[1,-34], shadowSize:[41,41]
+      iconUrl:
+        "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png",
+      shadowUrl:
+        "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41],
     });
 
-    const info = document.getElementById('info');
+    const info = document.getElementById("info");
 
     function pointInPolygon(pt, geo) {
-      return geo.features.find(f => turf.booleanPointInPolygon(pt,f))||null;
+      return geo.features.find((f) => turf.booleanPointInPolygon(pt, f)) || null;
     }
 
-    async function handlePosition(pos){
-      const lat=pos.coords.latitude, lon=pos.coords.longitude;
-      const userPt = turf.point([lon,lat]);
-      L.marker([lat,lon],{icon:redIcon}).addTo(map).bindPopup("Ви тут").openPopup();
-      map.setView([lat,lon],11);
+    async function handlePosition(pos) {
+      const lat = pos.coords.latitude,
+        lon = pos.coords.longitude;
+      const userPt = turf.point([lon, lat]);
 
-      try{
-        // Область
-        const resp=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=uk`);
-        const reg=await resp.json();
-        const oblast=reg.principalSubdivision;
-        if(!oblast) throw new Error("Не вдалося визначити область");
+      L.marker([lat, lon], { icon: redIcon })
+        .addTo(map)
+        .bindPopup("Ви тут")
+        .openPopup();
+      map.setView([lat, lon], 11);
+
+      try {
+        // Отримуємо область за координатами
+        const res = await fetch(
+          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=uk`
+        );
+        const reg = await res.json();
+        const oblast = reg.principalSubdivision;
+        if (!oblast) throw new Error("Не вдалося визначити область");
         info.innerHTML = `Область: <b>${oblast}</b><br>`;
 
-        // Громада
-        const comm = await fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/community.json').then(r=>r.json());
-        const filt = comm.features.filter(f=>{
-          const a=f.properties.ADMIN_1;
+        // Завантажуємо громади і фільтруємо за областю (двонапрямна перевірка)
+        const comm = await fetch(
+          "https://raw.githubusercontent.com/Rublenko/my_position/main/community.json"
+        ).then((r) => r.json());
+        const filt = comm.features.filter((f) => {
+          const a = f.properties.ADMIN_1;
           return oblast.includes(a) || a.includes(oblast);
         });
-        const matched = pointInPolygon(userPt, {type:"FeatureCollection",features:filt});
-        if(!matched){ info.innerHTML += "Громаду не знайдено."; return; }
+
+        // Знаходимо громаду, що містить точку користувача
+        const matched = pointInPolygon(userPt, {
+          type: "FeatureCollection",
+          features: filt,
+        });
+        if (!matched) {
+          info.innerHTML += "Громаду не знайдено.";
+          return;
+        }
         const props = matched.properties;
-        info.innerHTML += `Громада: <b>${props.ADMIN_3}</b><br>COD_3: <b>${props.COD_3}</b><br> Завантаження точок...`;
+        info.innerHTML += `Громада: <b>${props.ADMIN_3}</b><br>COD_3: <b>${props.COD_3}</b><br>Завантаження точок...`;
 
-        // Точки громади
-        const pts = await fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json').then(r=>r.json());
-        const codL=props.COD_3.toLowerCase();
-        const sel = pts.features.filter(f=>f.properties.cod_3?.toLowerCase()===codL && Array.isArray(f.geometry.coordinates));
+        // Завантажуємо точки і фільтруємо по COD_3 громади
+        const pts = await fetch(
+          "https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json"
+        ).then((r) => r.json());
+        const codL = props.COD_3.toLowerCase();
+        const sel = pts.features.filter(
+          (f) =>
+            f.properties.cod_3?.toLowerCase() === codL &&
+            Array.isArray(f.geometry.coordinates)
+        );
 
-        if(sel.length===0){ info.innerHTML += "<br>Точки не знайдені."; return; }
+        if (sel.length === 0) {
+          info.innerHTML += "<br>Точки не знайдені.";
+          return;
+        }
         info.innerHTML += `<br>Знайдено ${sel.length} точок.`;
 
+        // Знаходимо найближчу точку
         let nearest = sel[0];
-        let mind= turf.distance(userPt, turf.point(nearest.geometry.coordinates), {units:'kilometers'});
-        sel.forEach(f=>{
-          const d = turf.distance(userPt, turf.point(f.geometry.coordinates), {units:'kilometers'});
-          if(d < mind){ mind = d; nearest = f; }
+        let mind = turf.distance(userPt, turf.point(nearest.geometry.coordinates), {
+          units: "kilometers",
+        });
+        sel.forEach((f) => {
+          const d = turf.distance(userPt, turf.point(f.geometry.coordinates), {
+            units: "kilometers",
+          });
+          if (d < mind) {
+            mind = d;
+            nearest = f;
+          }
         });
 
-        // Відображення
-        sel.forEach(f=>{
-          const co=f.geometry.coordinates;
-          const ico = (f===nearest)? greenIcon : undefined;
-          L.marker([co[1],co[0]], {icon: ico}).addTo(map)
-            .bindPopup(`<b>${f.properties.name||'Без назви'}</b><br>${f.properties.adress||''}`);
+        // Відображення точок на карті
+        sel.forEach((f) => {
+          const co = f.geometry.coordinates;
+          const ico = f === nearest ? greenIcon : undefined;
+          L.marker([co[1], co[0]], { icon: ico })
+            .addTo(map)
+            .bindPopup(
+              `<b>${f.properties.name || "Без назви"}</b><br>${f.properties.adress || ""}`
+            );
         });
 
-        info.innerHTML += `<br><br><b>Найближча точка (${mind.toFixed(2)} км):</b><br>`;
-        info.innerHTML += `${nearest.properties.name || 'Без назви'}<br>`;
-        info.innerHTML += `${nearest.properties.adress || ''}`;
-      }
-      catch(err){
+        info.innerHTML += `<br><br><b>Найближча точка (${mind.toFixed(
+          2
+        )} км):</b><br>`;
+        info.innerHTML += `${nearest.properties.name || "Без назви"}<br>`;
+        info.innerHTML += `${nearest.properties.adress || ""}`;
+      } catch (err) {
         console.error(err);
-        info.innerHTML = "Помилка: "+err.message;
+        info.innerHTML = "Помилка: " + err.message;
       }
     }
 
-    if(navigator.geolocation){
-      navigator.geolocation.getCurrentPosition(handlePosition, e=>{
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(handlePosition, (e) => {
         info.innerHTML = "Геолокація недоступна: " + e.message;
       });
-    } else info.innerHTML= "Геолокація не підтримується.";
+    } else info.innerHTML = "Геолокація не підтримується.";
   </script>
 </body>
 </html>
