@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
-  <title>Громада за геолокацією (CONTAINS по області)</title>
+  <title>Громада за геолокацією (двостороння перевірка області)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -69,7 +69,7 @@
       map.setView(userLatLng, 10);
 
       try {
-        // 1. Отримуємо область від BigDataCloud
+        // 1. Отримуємо область з BigDataCloud
         const resRegion = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=uk`);
         const regionData = await resRegion.json();
         const oblastFromAPI = regionData.principalSubdivision;
@@ -82,10 +82,16 @@
         const resGeo = await fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/community.json');
         const geojson = await resGeo.json();
 
-        // 3. Фільтрація: CONTAINS(область з BigDataCloud, ADMIN_1)
+        // 3. Фільтрація з подвійною перевіркою входження
         const filtered = {
           type: "FeatureCollection",
-          features: geojson.features.filter(f => oblastFromAPI.includes(f.properties.ADMIN_1))
+          features: geojson.features.filter(f => {
+            const admin1 = f.properties.ADMIN_1;
+            return (
+              oblastFromAPI.includes(admin1) ||
+              admin1.includes(oblastFromAPI)
+            );
+          })
         };
 
         infoBlock.innerHTML += `<br>Знайдено полігонів для області: ${filtered.features.length}`;
