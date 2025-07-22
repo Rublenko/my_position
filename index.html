@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Громада з маршрутом до найближчої точки</title>
+  <title>Громада з маршрутом</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -55,6 +55,24 @@
     let pointMarkersGroup = L.layerGroup().addTo(map);
     let routingControl = null;
     let polygonLayer = null;
+    let userLatLng = null;
+
+    function updateRoute(destinationLatLng) {
+      if (!userLatLng) return;
+      if (routingControl) map.removeControl(routingControl);
+
+      routingControl = L.Routing.control({
+        waypoints: [
+          L.latLng(userLatLng),
+          L.latLng(destinationLatLng)
+        ],
+        routeWhileDragging: false,
+        showAlternatives: false,
+        fitSelectedRoutes: true,
+        addWaypoints: false,
+        show: window.innerWidth > 768
+      }).addTo(map);
+    }
 
     function pointInPolygon(userPoint, geojson) {
       for (let feature of geojson.features) {
@@ -68,7 +86,7 @@
     async function handlePosition(position) {
       const lat = position.coords.latitude;
       const lon = position.coords.longitude;
-      const userLatLng = [lat, lon];
+      userLatLng = [lat, lon];
       const userPoint = turf.point([lon, lat]);
 
       pointMarkersGroup.clearLayers();
@@ -91,7 +109,7 @@
         const oblastFromAPI = regionData.principalSubdivision;
         if (!oblastFromAPI) throw new Error("Не вдалося отримати назву області.");
 
-        infoBlock.innerText = `Отримано область: ${oblastFromAPI}\nЗавантаження полігонів...`;
+        infoBlock.innerText = `Область: ${oblastFromAPI}\nЗавантаження полігонів...`;
 
         const resGeo = await fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/community.json');
         const geojson = await resGeo.json();
@@ -104,15 +122,12 @@
           })
         };
 
-        infoBlock.innerText += `\nЗнайдено полігонів для області: ${filtered.features.length}`;
-
         const matchedFeature = pointInPolygon(userPoint, filtered);
         if (!matchedFeature) {
           infoBlock.innerText += "\nГромаду не знайдено для цієї області.";
           return;
         }
 
-        // Підсвітка полігона
         polygonLayer = L.geoJSON(matchedFeature, {
           style: {
             color: '#3388ff',
@@ -147,7 +162,6 @@
           return;
         }
 
-        // Знаходимо найближчу точку
         let nearest = matchedPoints[0];
         let minDist = turf.distance(userPoint, turf.point(nearest.geometry.coordinates), { units: 'kilometers' });
         matchedPoints.forEach(p => {
@@ -164,27 +178,20 @@
                       `${nearest.properties.adress || ''}`;
         infoBlock.innerText = outputText;
 
-        // Додаємо маркери всіх точок
+        // Додаємо всі маркери з кліком
         matchedPoints.forEach(p => {
           const coords = p.geometry.coordinates;
           const name = p.properties.name || "Без назви";
           const address = p.properties.adress || "";
-          L.marker([coords[1], coords[0]]).addTo(pointMarkersGroup)
+          const marker = L.marker([coords[1], coords[0]])
+            .addTo(pointMarkersGroup)
             .bindPopup(`<b>${name}</b><br>${address}`);
+
+          marker.on('click', () => updateRoute([coords[1], coords[0]]));
         });
 
-        // Додаємо маршрут до найближчої точки
-        routingControl = L.Routing.control({
-          waypoints: [
-            L.latLng(lat, lon),
-            L.latLng(nearest.geometry.coordinates[1], nearest.geometry.coordinates[0])
-          ],
-          routeWhileDragging: false,
-          showAlternatives: false,
-          fitSelectedRoutes: true,
-          addWaypoints: false,
-          show: window.innerWidth > 768 // показувати опис маршруту лише на десктопі
-        }).addTo(map);
+        // Створюємо початковий маршрут до найближчої точки
+        updateRoute([nearest.geometry.coordinates[1], nearest.geometry.coordinates[0]]);
 
       } catch (error) {
         console.error("Помилка:", error);
