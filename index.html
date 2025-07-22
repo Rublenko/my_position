@@ -208,13 +208,19 @@
                       `${nearest.properties.adress || ''}`;
         infoBlock.innerText = outputText;
 
+        // Додаємо всі маркери з tooltip (підказкою при наведенні)
         matchedPoints.forEach(p => {
           const coords = p.geometry.coordinates;
           const name = p.properties.name || "Без назви";
           const address = p.properties.adress || "";
           const marker = L.marker([coords[1], coords[0]])
             .addTo(pointMarkersGroup)
-            .bindPopup(`<b>${name}</b><br>${address}`);
+            .bindTooltip(`<b>${name}</b><br>${address}`, {
+              direction: 'top',
+              offset: [0, -10],
+              opacity: 0.9,
+              permanent: false // показує при наведенні
+            });
 
           marker.on('click', () => updateRoute([coords[1], coords[0]]));
         });
