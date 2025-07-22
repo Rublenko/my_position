@@ -6,11 +6,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    #map { height: 100vh; width: 100%; }
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+    #map {
+      height: calc(100% - 120px);
+      width: 100%;
+    }
+    #info {
+      height: 120px;
+      overflow-y: auto;
+      padding: 10px;
+      background: #f7f7f7;
+      border-top: 2px solid #ccc;
+      font-family: sans-serif;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="info">Очікуємо визначення місцезнаходження...</div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
@@ -30,6 +46,8 @@
       popupAnchor: [1, -34],
       shadowSize: [41, 41]
     });
+
+    const infoBlock = document.getElementById('info');
 
     function pointInPolygon(userPoint, geojson) {
       for (let feature of geojson.features) {
@@ -53,17 +71,16 @@
       fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/community.json')
         .then(res => res.json())
         .then(geojson => {
-          const userPoint = turf.point(userCoords); // GeoJSON Point [lon, lat]
+          const userPoint = turf.point(userCoords);
 
           const matchedFeature = pointInPolygon(userPoint, geojson);
           if (matchedFeature) {
             const props = matchedFeature.properties;
             const popupContent = `
-              <b>Ви в межах:</b><br/>
-              Область: ${props.ADMIN_1}<br/>
-              Район: ${props.ADMIN_2}<br/>
-              Громада: ${props.ADMIN_3}<br/>
-              Тип: ${props.type_NP}<br/>
+              <b>Область:</b> ${props.ADMIN_1}<br/>
+              <b>Район:</b> ${props.ADMIN_2}<br/>
+              <b>Громада:</b> ${props.ADMIN_3}<br/>
+              <b>Тип:</b> ${props.type_NP}<br/>
               <b>Код COD_3:</b> ${props.COD_3}
             `;
 
@@ -72,25 +89,23 @@
               weight: 2
             }).addTo(map);
 
-            L.popup()
-              .setLatLng(userLatLng)
-              .setContent(popupContent)
-              .openOn(map);
+            infoBlock.innerHTML = popupContent;
           } else {
-            alert("Не вдалося знайти громаду для вашого місцезнаходження.");
+            infoBlock.innerHTML = "Не знайдено громаду для вашого місцезнаходження.";
           }
         })
         .catch(err => {
           console.error("Помилка завантаження GeoJSON:", err);
+          infoBlock.innerHTML = "Помилка при завантаженні даних громад.";
         });
     }
 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(handlePosition, error => {
-        alert("Не вдалося визначити місцезнаходження: " + error.message);
+        infoBlock.innerHTML = "Не вдалося визначити місцезнаходження: " + error.message;
       });
     } else {
-      alert("Ваш браузер не підтримує геолокацію.");
+      infoBlock.innerHTML = "Ваш браузер не підтримує геолокацію.";
     }
   </script>
 </body>
