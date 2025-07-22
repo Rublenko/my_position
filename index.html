@@ -10,44 +10,19 @@
 </head>
 <body>
   <div id="map"></div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const map = L.map('map').setView([48.3794, 31.1656], 6); // Центр України
+    // Створюємо мапу без фокусу
+    const map = L.map('map');
+    let userLatLng = [48.3794, 31.1656]; // Центр України як дефолт
 
+    // Базовий шар карти
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    // Завантаження GeoJSON
-    fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json')
-      .then(response => {
-        if (!response.ok) throw new Error("Не вдалося завантажити JSON");
-        return response.json();
-      })
-      .then(data => {
-        if (!data.features || !Array.isArray(data.features)) {
-          console.error("JSON не містить features");
-          return;
-        }
-
-        data.features.forEach((feature, i) => {
-          const coords = feature.geometry && feature.geometry.coordinates;
-          const name = feature.properties && feature.properties.name || 'Без назви';
-
-          if (coords && coords.length === 2) {
-            const latlng = [coords[1], coords[0]]; // [lat, lon]
-            L.marker(latlng).addTo(map)
-              .bindPopup(`<b>${name}</b><br/>Координати: ${latlng.join(', ')}`);
-          } else {
-            console.warn(`Точка ${i + 1} має некоректні координати`);
-          }
-        });
-      })
-      .catch(err => {
-        console.error(err);
-      });
-
-    // Додавання червоного маркера твого місцезнаходження
+    // Червоний маркер для користувача
     const redIcon = L.icon({
       iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
       shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
@@ -57,20 +32,65 @@
       shadowSize: [41, 41]
     });
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(position => {
-        const userLatLng = [position.coords.latitude, position.coords.longitude];
-        L.marker(userLatLng, { icon: redIcon })
-          .addTo(map)
-          .bindPopup("Ваше місцезнаходження")
-          .openPopup();
-        map.setView(userLatLng, 12); // наближаємось до вашої позиції
-      }, error => {
-        console.warn("Не вдалося визначити місцезнаходження: ", error.message);
-      });
-    } else {
-      console.warn("Геолокація не підтримується цим браузером.");
+    // Геолокація
+    function locateUser() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(position => {
+          userLatLng = [position.coords.latitude, position.coords.longitude];
+          L.marker(userLatLng, { icon: redIcon })
+            .addTo(map)
+            .bindPopup("Ваше місцезнаходження")
+            .openPopup();
+          map.setView(userLatLng, 12);
+
+          // Після успішного визначення позиції — завантажуємо точки
+          loadGeoJson();
+        }, error => {
+          console.warn("Не вдалося визначити місцезнаходження:", error.message);
+          // Все одно вантажимо точки, але фокусуємось на дефолтній точці
+          map.setView(userLatLng, 6);
+          loadGeoJson();
+        });
+      } else {
+        console.warn("Геолокація не підтримується цим браузером.");
+        map.setView(userLatLng, 6);
+        loadGeoJson();
+      }
     }
+
+    // Завантаження GeoJSON після геолокації
+    function loadGeoJson() {
+      fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json')
+        .then(response => {
+          if (!response.ok) throw new Error("Не вдалося завантажити JSON");
+          return response.json();
+        })
+        .then(data => {
+          if (!data.features || !Array.isArray(data.features)) {
+            console.error("JSON не містить features");
+            return;
+          }
+
+          data.features.forEach((feature, i) => {
+            const coords = feature.geometry?.coordinates;
+            const name = feature.properties?.name || 'Без назви';
+
+            if (coords?.length === 2) {
+              const latlng = [coords[1], coords[0]]; // [lat, lon]
+              L.marker(latlng).addTo(map)
+                .bindPopup(`<b>${name}</b><br/>Координати: ${latlng.join(', ')}`);
+            } else {
+              console.warn(`Точка ${i + 1} має некоректні координати`);
+            }
+          });
+        })
+        .catch(err => {
+          console.error(err);
+        });
+    }
+
+    // Запуск
+    locateUser();
   </script>
 </body>
 </html>
