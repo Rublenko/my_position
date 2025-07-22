@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <title>Громада з маршрутом до найближчої точки</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
-  
+
   <style>
     html, body { height: 100%; margin: 0; }
     #map { height: calc(100% - 140px); width: 100%; }
@@ -48,6 +48,7 @@
     const infoBlock = document.getElementById('info');
     let pointMarkersGroup = L.layerGroup().addTo(map);
     let routingControl = null;
+    let polygonLayer = null;
 
     function pointInPolygon(userPoint, geojson) {
       for (let feature of geojson.features) {
@@ -69,6 +70,11 @@
       if (routingControl) {
         map.removeControl(routingControl);
         routingControl = null;
+      }
+
+      if (polygonLayer) {
+        map.removeLayer(polygonLayer);
+        polygonLayer = null;
       }
 
       L.marker(userLatLng, { icon: redIcon }).addTo(map)
@@ -101,6 +107,17 @@
           infoBlock.innerText += "\nГромаду не знайдено для цієї області.";
           return;
         }
+
+        // 🔹 Додано: підсвітка полігона громади
+        polygonLayer = L.geoJSON(matchedFeature, {
+          style: {
+            color: "#0074D9",
+            weight: 3,
+            opacity: 0.8,
+            fillColor: "#7FDBFF",
+            fillOpacity: 0.3
+          }
+        }).addTo(map);
 
         const props = matchedFeature.properties;
         const cod3 = props.COD_3?.toLowerCase();
