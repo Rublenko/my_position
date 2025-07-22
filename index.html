@@ -3,33 +3,48 @@
 <head>
   <meta charset="UTF-8" />
   <title>Перевірка координат MAP_WAR.json</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #map { height: 100vh; width: 100%; }
+  </style>
 </head>
 <body>
-<script>
-  fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json')
-    .then(response => {
-      if (!response.ok) throw new Error("Не вдалося завантажити JSON");
-      return response.json();
-    })
-    .then(data => {
-      if (!data.features || !Array.isArray(data.features)) {
-        console.error("JSON не містить features");
-        return;
-      }
-      data.features.forEach((feature, i) => {
-        const coords = feature.geometry && feature.geometry.coordinates;
-        const name = feature.properties && feature.properties.name;
-        if (coords && coords.length === 2) {
-          console.log(`Точка ${i + 1}: ${name || 'Без назви'}, координати: [${coords[1]}, ${coords[0]}]`);
-          // Зверни увагу: GeoJSON координати [lon, lat], а leaflet приймає [lat, lon]
-        } else {
-          console.warn(`Точка ${i + 1} має некоректні координати`);
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([48.3794, 31.1656], 6); // Центр України
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json')
+      .then(response => {
+        if (!response.ok) throw new Error("Не вдалося завантажити JSON");
+        return response.json();
+      })
+      .then(data => {
+        if (!data.features || !Array.isArray(data.features)) {
+          console.error("JSON не містить features");
+          return;
         }
+
+        data.features.forEach((feature, i) => {
+          const coords = feature.geometry && feature.geometry.coordinates;
+          const name = feature.properties && feature.properties.name || 'Без назви';
+
+          if (coords && coords.length === 2) {
+            const latlng = [coords[1], coords[0]]; // [lat, lon]
+            L.marker(latlng).addTo(map)
+              .bindPopup(`<b>${name}</b><br/>Координати: ${latlng.join(', ')}`);
+          } else {
+            console.warn(`Точка ${i + 1} має некоректні координати`);
+          }
+        });
+      })
+      .catch(err => {
+        console.error(err);
       });
-    })
-    .catch(err => {
-      console.error(err);
-    });
-</script>
+  </script>
 </body>
 </html>
