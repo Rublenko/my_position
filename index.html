@@ -20,6 +20,12 @@
       font-family: sans-serif;
       white-space: pre-line;
     }
+
+    @media (max-width: 768px) {
+      .leaflet-routing-container {
+        display: none !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -66,12 +72,10 @@
       const userPoint = turf.point([lon, lat]);
 
       pointMarkersGroup.clearLayers();
-
       if (routingControl) {
         map.removeControl(routingControl);
         routingControl = null;
       }
-
       if (polygonLayer) {
         map.removeLayer(polygonLayer);
         polygonLayer = null;
@@ -108,14 +112,13 @@
           return;
         }
 
-        // 🔹 Додано: підсвітка полігона громади
+        // Підсвітка полігона
         polygonLayer = L.geoJSON(matchedFeature, {
           style: {
-            color: "#0074D9",
+            color: '#3388ff',
             weight: 3,
-            opacity: 0.8,
-            fillColor: "#7FDBFF",
-            fillOpacity: 0.3
+            fillColor: '#3388ff',
+            fillOpacity: 0.2
           }
         }).addTo(map);
 
@@ -179,7 +182,8 @@
           routeWhileDragging: false,
           showAlternatives: false,
           fitSelectedRoutes: true,
-          addWaypoints: false
+          addWaypoints: false,
+          show: window.innerWidth > 768 // показувати опис маршруту лише на десктопі
         }).addTo(map);
 
       } catch (error) {
