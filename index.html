@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="UTF-8" />
-  <title>Перевірка координат MAP_WAR.json</title>
+  <meta charset="UTF-8">
+  <title>Громада за геолокацією</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     #map { height: 100vh; width: 100%; }
@@ -12,17 +13,15 @@
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    // Створюємо мапу без фокусу
-    const map = L.map('map');
-    let userLatLng = [48.3794, 31.1656]; // Центр України як дефолт
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 
-    // Базовий шар карти
+  <script>
+    const map = L.map('map').setView([48.3794, 31.1656], 6); // Центр України
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    // Червоний маркер для користувача
     const redIcon = L.icon({
       iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
       shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
@@ -32,65 +31,67 @@
       shadowSize: [41, 41]
     });
 
-    // Геолокація
-    function locateUser() {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(position => {
-          userLatLng = [position.coords.latitude, position.coords.longitude];
-          L.marker(userLatLng, { icon: redIcon })
-            .addTo(map)
-            .bindPopup("Ваше місцезнаходження")
-            .openPopup();
-          map.setView(userLatLng, 12);
-
-          // Після успішного визначення позиції — завантажуємо точки
-          loadGeoJson();
-        }, error => {
-          console.warn("Не вдалося визначити місцезнаходження:", error.message);
-          // Все одно вантажимо точки, але фокусуємось на дефолтній точці
-          map.setView(userLatLng, 6);
-          loadGeoJson();
-        });
-      } else {
-        console.warn("Геолокація не підтримується цим браузером.");
-        map.setView(userLatLng, 6);
-        loadGeoJson();
+    function pointInPolygon(userPoint, geojson) {
+      for (let feature of geojson.features) {
+        if (turf.booleanPointInPolygon(userPoint, feature)) {
+          return feature;
+        }
       }
+      return null;
     }
 
-    // Завантаження GeoJSON після геолокації
-    function loadGeoJson() {
-      fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/MAP_WAR.json')
-        .then(response => {
-          if (!response.ok) throw new Error("Не вдалося завантажити JSON");
-          return response.json();
-        })
-        .then(data => {
-          if (!data.features || !Array.isArray(data.features)) {
-            console.error("JSON не містить features");
-            return;
+    function handlePosition(position) {
+      const userCoords = [position.coords.longitude, position.coords.latitude];
+      const userLatLng = [userCoords[1], userCoords[0]];
+
+      L.marker(userLatLng, { icon: redIcon })
+        .addTo(map)
+        .bindPopup("Ваше місцезнаходження")
+        .openPopup();
+      map.setView(userLatLng, 11);
+
+      fetch('https://raw.githubusercontent.com/Rublenko/my_position/main/community.json')
+        .then(res => res.json())
+        .then(geojson => {
+          const userPoint = turf.point(userCoords); // GeoJSON Point [lon, lat]
+
+          const matchedFeature = pointInPolygon(userPoint, geojson);
+          if (matchedFeature) {
+            const props = matchedFeature.properties;
+            const popupContent = `
+              <b>Ви в межах:</b><br/>
+              Область: ${props.ADMIN_1}<br/>
+              Район: ${props.ADMIN_2}<br/>
+              Громада: ${props.ADMIN_3}<br/>
+              Тип: ${props.type_NP}<br/>
+              <b>Код COD_3:</b> ${props.COD_3}
+            `;
+
+            L.polygon(matchedFeature.geometry.coordinates, {
+              color: 'blue',
+              weight: 2
+            }).addTo(map);
+
+            L.popup()
+              .setLatLng(userLatLng)
+              .setContent(popupContent)
+              .openOn(map);
+          } else {
+            alert("Не вдалося знайти громаду для вашого місцезнаходження.");
           }
-
-          data.features.forEach((feature, i) => {
-            const coords = feature.geometry?.coordinates;
-            const name = feature.properties?.name || 'Без назви';
-
-            if (coords?.length === 2) {
-              const latlng = [coords[1], coords[0]]; // [lat, lon]
-              L.marker(latlng).addTo(map)
-                .bindPopup(`<b>${name}</b><br/>Координати: ${latlng.join(', ')}`);
-            } else {
-              console.warn(`Точка ${i + 1} має некоректні координати`);
-            }
-          });
         })
         .catch(err => {
-          console.error(err);
+          console.error("Помилка завантаження GeoJSON:", err);
         });
     }
 
-    // Запуск
-    locateUser();
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(handlePosition, error => {
+        alert("Не вдалося визначити місцезнаходження: " + error.message);
+      });
+    } else {
+      alert("Ваш браузер не підтримує геолокацію.");
+    }
   </script>
 </body>
 </html>
