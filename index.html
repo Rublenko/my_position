@@ -116,7 +116,16 @@
     function showInfo(properties) {
       infoFields.forEach(field => {
         const el = document.getElementById('info-' + field);
-        el.textContent = properties[field] || '—';
+        const value = properties[field] || '—';
+        if (field === 'web' && value !== '—') {
+          el.innerHTML = `<a href="${value}" target="_blank" rel="noopener noreferrer">${value}</a>`;
+        } else if (field === 'tel_consul' && value !== '—') {
+          el.innerHTML = `<a href="tel:${value}">${value}</a>`;
+        } else if (field === 'onl_consul' && value !== '—') {
+          el.innerHTML = `<a href="mailto:${value}">${value}</a>`;
+        } else {
+          el.textContent = value;
+        }
       });
       infoPanel.style.display = 'block';
     }
